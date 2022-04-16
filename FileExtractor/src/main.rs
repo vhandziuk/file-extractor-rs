@@ -3,6 +3,7 @@ use std::env;
 use std::path;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
+use walkdir::WalkDir;
 
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -18,12 +19,14 @@ struct CommandLineOptions {
 }
 
 fn main() {
+    // configure logging
     let subscriber = FmtSubscriber::builder()
         .with_max_level(Level::TRACE)
         .finish();
 
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
+    // parse command line arguments
     match CommandLineOptions::try_parse() {
         Ok(options) => {
             let source_path = match options.source {
@@ -50,9 +53,29 @@ fn main() {
                 }
             };
 
-            info!("source: {}", source_path);
-            info!("destination: {}", destination_path);
-            info!("configuration: {}", configuration_path);
+            // check .ZIP files in the source directory
+            let archives = WalkDir::new(source_path)
+                .into_iter()
+                .filter_map(|e| match e {
+                    Ok(fs_entry) => {
+                        if let Some(file_name) = fs_entry.file_name().to_str() {
+                            if file_name.to_lowercase().ends_with(".zip") {
+                                match fs_entry.into_path().into_os_string().into_string() {
+                                    Ok(file_path) => Some(file_path),
+                                    Err(_) => None,
+                                }
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    }
+                    Err(_) => None,
+                })
+                .collect::<Vec<_>>();
+
+            archives.into_iter().for_each(|a| info!("{}", a));
         }
         Err(error) => {
             info!("could not parse command line options {}", error)
