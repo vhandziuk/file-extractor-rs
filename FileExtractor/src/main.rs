@@ -1,18 +1,19 @@
 use clap::Parser;
 use std::env;
+use std::path;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
 struct CommandLineOptions {
-    #[clap(short, long, help = "Path to a CSV configuration file")]
+    #[clap(short, long, help = "path to a CSV configuration file")]
     configuration: Option<String>,
 
-    #[clap(short, long, help = "Path to the source directory")]
+    #[clap(short, long, help = "path to the source directory")]
     source: Option<String>,
 
-    #[clap(short, long, help = "Path to the destination directory")]
+    #[clap(short, long, help = "path to the destination directory")]
     destination: Option<String>,
 }
 
@@ -25,16 +26,33 @@ fn main() {
 
     match CommandLineOptions::try_parse() {
         Ok(options) => {
-            let configuration = match options.configuration {
-                Some(config) => config,
+            let source_path = match options.source {
+                Some(source) => source,
+                None => env::current_dir()
+                    .expect("retrieving current directory failed")
+                    .into_os_string()
+                    .into_string()
+                    .unwrap_or_default(),
+            };
+            let destination_path = match options.destination {
+                Some(destination) => destination,
+                None => String::from(source_path.as_str()),
+            };
+            let configuration_path = match options.configuration {
+                Some(configuration) => configuration,
                 None => {
-                    info!("configuration option not provided, using current directory as default");
-                    match env::current_dir() {
-                        Ok(curr_path) => curr_path.as_os_str(),
-                        Err => String::from(""),
-                    }
+                    let mut configuration = path::PathBuf::from(source_path.as_str());
+                    configuration.extend(&["configuration.csv"]);
+                    configuration
+                        .into_os_string()
+                        .into_string()
+                        .unwrap_or_default()
                 }
             };
+
+            info!("source: {}", source_path);
+            info!("destination: {}", destination_path);
+            info!("configuration: {}", configuration_path);
         }
         Err(error) => {
             info!("could not parse command line options {}", error)
