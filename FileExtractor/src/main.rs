@@ -1,6 +1,9 @@
 use clap::Parser;
 use std::env;
+use std::fs::File;
+use std::io::{self, BufRead};
 use std::path;
+use std::path::Path;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 use walkdir::WalkDir;
@@ -16,6 +19,11 @@ struct CommandLineOptions {
 
     #[clap(short, long, help = "path to the destination directory")]
     destination: Option<String>,
+}
+
+struct FileInfoData {
+    name: String,
+    directory_name: String,
 }
 
 fn main() {
@@ -75,10 +83,36 @@ fn main() {
                 })
                 .collect::<Vec<_>>();
 
-            archives.into_iter().for_each(|a| info!("{}", a));
+            // reading .CSV configuration file
+            if let Ok(lines) = read_lines(configuration_path.as_str()) {
+                let file_infos = lines
+                    .filter_map(|line| match line {
+                        Ok(l) => {
+                            let splitted = l.split(',').collect::<Vec<_>>();
+                            Some(FileInfoData {
+                                name: String::from(splitted[0]),
+                                directory_name: String::from(splitted[1]),
+                            })
+                        }
+                        Err(_) => None,
+                    })
+                    .collect::<Vec<_>>();
+
+                file_infos
+                    .into_iter()
+                    .for_each(|b| info!("{} {}", b.name, b.directory_name));
+            }
         }
         Err(error) => {
             info!("could not parse command line options {}", error)
         }
     };
+}
+
+fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
+where
+    P: AsRef<Path>,
+{
+    let file = File::open(filename)?;
+    Ok(io::BufReader::new(file).lines())
 }
